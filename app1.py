@@ -34,29 +34,11 @@ st.markdown("""
         font-size: 0.95rem;
     }
 
-    /* Nhãn giá & Badge */
+    /* Nhãn giá */
     .price-tag {
         font-size: 1.15rem;
         font-weight: 700;
         color: #e11d48;
-    }
-    .badge-ai {
-        background-color: #eff6ff;
-        color: #1d4ed8;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        border: 1px solid #bfdbfe;
-    }
-    .badge-hot {
-        background-color: #fef2f2;
-        color: #dc2626;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        border: 1px solid #fecaca;
     }
     .product-title {
         font-weight: 600;
@@ -66,7 +48,7 @@ st.markdown("""
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        margin-top: 6px;
+        margin-top: 2px;
         margin-bottom: 4px;
     }
     .total-box {
@@ -202,7 +184,6 @@ with main_col:
             with rec_cols[idx % 3]:
                 with st.container(border=True):
                     price = get_item_price(rec["item"])
-                    st.markdown(f'<span class="badge-ai">🎯 Khớp {rec["confidence"]*100:.0f}% • Lift {rec["lift"]:.1f}x</span>', unsafe_allow_html=True)
                     st.markdown(f'<div class="product-title" title="{rec["item"]}">{rec["item"]}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="price-tag">£{price:.2f}</div>', unsafe_allow_html=True)
                     st.caption(f"Mua kèm với: *{rec['based_on'][:28]}...*" if len(rec['based_on']) > 28 else f"Mua kèm với: *{rec['based_on']}*")
@@ -212,20 +193,43 @@ with main_col:
 
     st.markdown("---")
 
-    # 3. KHU VỰC SẢN PHẨM BÁN CHẠY (STOREFRONT CATALOG)
-    st.subheader("🔥 Sản phẩm bán chạy tại cửa hàng")
-    catalog_df = top_items_df[~top_items_df["Description"].isin(cart_set)].head(6)
+    # 3. KHU VỰC SẢN PHẨM GỢI Ý (Lấy từ các luật kết hợp mạnh nhất)
+    st.subheader("🛍️ Sản phẩm gợi ý")
+
+    source_rules = filtered_rules if not filtered_rules.empty else rules_df
+    strong_rules = source_rules.sort_values(by=["lift", "confidence"], ascending=False)
+
+    strong_items = []
+    seen_items = set(cart_set)
+    for _, row in strong_rules.iterrows():
+        for item in list(row["antecedents_list"]) + list(row["consequents_list"]):
+            if item not in seen_items:
+                strong_items.append(item)
+                seen_items.add(item)
+            if len(strong_items) >= 6:
+                break
+        if len(strong_items) >= 6:
+            break
+
+    # Bổ sung nếu số sản phẩm từ luật ít hơn 6
+    if len(strong_items) < 6:
+        for desc in top_items_df["Description"].tolist():
+            if desc not in seen_items:
+                strong_items.append(desc)
+                seen_items.add(desc)
+            if len(strong_items) >= 6:
+                break
 
     cat_cols = st.columns(3)
-    for idx, (_, item) in enumerate(catalog_df.iterrows()):
+    for idx, item_name in enumerate(strong_items):
         with cat_cols[idx % 3]:
             with st.container(border=True):
-                st.markdown(f'<span class="badge-hot">🔥 {item["invoice_count"]:,} lượt mua</span>', unsafe_allow_html=True)
-                st.markdown(f'<div class="product-title" title="{item["Description"]}">{item["Description"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="price-tag">£{item["avg_price"]:.2f}</div>', unsafe_allow_html=True)
+                price = get_item_price(item_name)
+                st.markdown(f'<div class="product-title" title="{item_name}">{item_name}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="price-tag">£{price:.2f}</div>', unsafe_allow_html=True)
                 st.caption("Sẵn hàng • Giao tiêu chuẩn UK")
-                if st.button("➕ Chọn mua", key=f"cat_{item['Description']}", use_container_width=True):
-                    add_to_cart(item["Description"])
+                if st.button("➕ Chọn mua", key=f"cat_{item_name}", use_container_width=True):
+                    add_to_cart(item_name)
                     st.rerun()
 
 # ==============================================================================
